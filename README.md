@@ -164,7 +164,7 @@ Reads a Google Sheet, computes a summary (total, average, top item), and sends a
 **n8n version:** 1.50.0+
 
 📥 **[Download JSON](workflows/small-business/sheets-email-report.json)**  
-📖 **[Full Tutorial → TriggerWorkflow.com](https://www.triggerworkflow.com)**
+📖 **[Full Tutorial → TriggerWorkflow.com]([https://www.triggerworkflow.com](https://www.triggerworkflow.com/2026/07/master-n8n-google-sheets-errors-fixed-free-template.html))**
 
 ---
 
