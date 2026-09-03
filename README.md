@@ -25,6 +25,16 @@ Every workflow here is:
 
 ---
 
+## 📚 Learning Hub — 27 Free n8n Guides
+
+Prefer in-depth tutorials over ready-made JSON? The **[n8n Learning Hub](learning-hub/README.md)** curates 27 free guides into a clear learning path:
+
+- 🐣 [Getting Started](learning-hub/01-getting-started.md) · 🤖 [AI Agents & LLM Workflows](learning-hub/02-ai-agents.md) · 🐛 [Error Fixes & Troubleshooting](learning-hub/03-error-fixes.md) · 🏢 [Small Business Workflows](learning-hub/04-business-workflows.md) · ⚙️ [Platform, Scaling & Tooling](learning-hub/05-platform-scaling.md)
+
+Every guide is a full tutorial published on [TriggerWorkflow.com](https://www.triggerworkflow.com).
+
+---
+
 ## 📁 Workflow Categories
 
 | Category | Workflows | Description |
