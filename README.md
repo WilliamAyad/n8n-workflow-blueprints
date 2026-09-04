@@ -35,6 +35,18 @@ Every guide is a full tutorial published on [TriggerWorkflow.com](https://www.tr
 
 ---
 
+## 💼 Premium: the backup & restore kit
+
+This repo stays free (MIT) and is about **workflows**. The paid product is about the one thing a workflow can't fix on its own — **keeping an instance alive when the server doesn't**:
+
+**[n8n Bulletproof — Backup & Restore Kit](product/n8n-bulletproof-backup-kit/README-KIT.md)**
+
+Self-hosted n8n encrypts every stored credential with a key it generates silently on first launch. Rebuild a container, restore a database onto a new box, or lose a volume, and n8n boots looking healthy while every workflow fails with `Credentials could not be decrypted` — permanently unrecoverable without the original key. The kit ships the hardened compose file (which refuses to start without a key), a nightly backup script that captures all four components, a restore playbook, a five-minute drill that proves a restore works, and the client templates that turn this into a paid maintenance line item.
+
+Source lives in [`product/`](product/) in this repo so the scripts stay version-controlled; the buyer-facing `.zip` is a build artifact.
+
+---
+
 ## 📁 Workflow Categories
 
 | Category | Workflows | Description |

@@ -1,0 +1,39 @@
+# ============================================================
+#  /etc/n8n-backup.env  -  configuration for the backup scripts
+#  Install:  sudo cp n8n-backup.defaults /etc/n8n-backup.env && sudo nano it
+#  The scripts read this file automatically. No editing of scripts needed.
+# ============================================================
+
+# --- where your stack lives ---
+STACK_DIR=/opt/n8n                 # folder containing docker-compose.yml
+N8N_SERVICE=n8n                    # service name inside compose
+N8N_CONTAINER=n8n                  # running container name
+DB_CONTAINER=n8n-postgres-1        # postgres container (docker compose ps shows these)
+DB_USER=n8n
+DB_NAME=n8n
+
+# leave empty to auto-detect the mounted volume; set it if detection fails
+# example: DATA_VOLUME=n8n_n8n_data
+DATA_VOLUME=
+
+# --- where backups are written ---
+BACKUP_ROOT=/var/backups/n8n
+RETENTION_DAYS=14
+
+# --- 1 = one JSON file per workflow/credential (nicer to diff, safer to keep) ---
+EXPORT_SEPARATE=1
+
+# --- 1 = ALSO store credentials in plaintext. ---
+# Only enable if the offsite copy is encrypted (OFFSITE_ENCRYPT_NAME) or the disk
+# is encrypted. It makes restore possible even if the key is lost later.
+# Plaintext = every client's API key readable by anyone holding the file.
+INCLUDE_DECRYPTED=0
+
+# --- offsite (rclone). Fill via 05-offsite.sh setup ---
+OFFSITE_REMOTE=
+OFFSITE_ENCRYPT_NAME=
+
+# --- optional monitoring: create a check at https://healthchecks.io, paste the UUID.
+# If a nightly backup does not ping within 26h, they email/notify you. ~$0.
+# This is how you find out about a broken backup BEFORE you need the backup.
+HEALTHCHECK_UUID=

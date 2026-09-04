@@ -1,0 +1,671 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>n8n Bulletproof — Backup &amp; Restore Kit</title>
+<meta name="description" content="Backup, restore and disaster-recovery kit for self-hosted n8n on a VPS: encryption-key safety, nightly offsite copies, restore drill, client runbook.">
+<style>:root{--ink:#15202e;--mut:#5b6b7c;--acc:#f5a524;--teal:#2bb3a3;--line:#e3e8ee;--code:#0f1a26}
+*{box-sizing:border-box}
+body{margin:0;background:#f7f9fb;color:var(--ink);
+ font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:820px;margin:0 auto;padding:0 22px 90px}
+header.cover{background:linear-gradient(160deg,#0e1726,#152a3d 60%,#0e1726);color:#fff;padding:54px 22px 46px;margin-bottom:34px}
+.cover .wrap{text-align:left}
+.cover h1{font-size:38px;line-height:1.15;margin:0 0 10px;letter-spacing:-.5px}
+.cover p.sub{color:#c9d6e3;margin:0 0 22px;font-size:19px;max-width:60ch}
+.badges span{display:inline-block;border:1px solid #3a5570;color:#cfe0ef;border-radius:999px;padding:5px 13px;font-size:13px;margin:0 8px 8px 0;background:#132437}
+h1.doctitle{font-size:29px;margin:0 0 6px;padding-top:10px;border-bottom:3px solid var(--acc);display:inline-block}
+h2{font-size:21px;margin:34px 0 10px;padding-left:12px;border-left:4px solid var(--teal)}
+h3{font-size:17.5px;margin:24px 0 8px;color:#25384c}
+section{background:#fff;border:1px solid var(--line);border-radius:14px;padding:30px 34px;margin:0 0 26px;
+ box-shadow:0 1px 2px rgba(21,32,46,.04)}
+p,li{overflow-wrap:break-word}
+code{background:#eef2f6;border:1px solid #dfe6ee;border-radius:5px;padding:.05em .35em;font-size:.86em;
+ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+pre{background:var(--code);color:#e6edf3;padding:16px 18px;border-radius:10px;overflow:auto;font-size:13.5px;line-height:1.55}
+pre code{background:none;border:none;color:inherit;padding:0;font-size:inherit}
+blockquote{margin:20px 0;padding:12px 18px;background:#fff9ec;border-left:4px solid var(--acc);border-radius:0 8px 8px 0;color:#4a3c19}
+blockquote p{margin:.3em 0}
+table{width:100%;border-collapse:collapse;margin:20px 0;font-size:14.5px;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+th{background:#f2f6fa;font-weight:600}
+tr:nth-child(even) td{background:#fbfcfe}
+a{color:#0d6b8a;text-decoration-thickness:1px}
+hr{border:none;border-top:1px solid var(--line);margin:30px 0}
+.toc{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 30px;margin-bottom:28px}
+.toc ol{margin:0;padding-left:22px}
+footer{color:var(--mut);font-size:13.5px;text-align:center;padding:26px 0 0}
+@media print{
+ body{background:#fff;font-size:11.5pt;line-height:1.5}
+ header.cover{background:#0e1726!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ section{border:none;box-shadow:none;padding:0;margin:0 0 14px;break-inside:auto}
+ h1.doctitle{break-before:page}
+ pre,table,blockquote{break-inside:avoid}
+ .wrap{max-width:none;padding:0}
+ a{color:inherit;text-decoration:none}
+}
+</style></head><body>
+<header class="cover"><div class="wrap">
+<h1>n8n Bulletproof</h1>
+<p class="sub">Backup &amp; Restore Kit for self-hosted n8n — the scripts, the playbook, and the drill that proves a restore works.</p>
+<div class="badges"><span>v1.0</span><span>Ubuntu / Debian + Docker</span><span>no coding required</span><span>updated 2026-09-04</span></div>
+</div></header>
+<div class="wrap">
+<div class="toc"><h2>Table of contents</h2>
+<ol>
+<li><a href="#0">Read me first</a></li>
+<li><a href="#1">1 · Why n8n backups fail</a></li>
+<li><a href="#2">2 · Setup in 25 minutes</a></li>
+<li><a href="#3">3 · Restore playbook</a></li>
+<li><a href="#4">4 · Running it forever</a></li>
+<li><a href="#5">Scripts reference</a></li>
+</ol></div>
+<section id="0"><h1 class="doctitle">Read me first</h1><h1>n8n Bulletproof Backup &amp; Restore Kit</h1>
+<p><strong>Turn a self-hosted n8n instance into something you can actually rebuild after it breaks — in under 30 minutes, with a dated proof that it works.</strong></p>
+<p>You don't need to know how to code. Every file here is copy-paste. Each step says what it does and what it should print.</p>
+<hr />
+<h2>Who this is for</h2>
+<table>
+<thead>
+<tr>
+<th>You are…</th>
+<th>Why this kit pays for itself</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Freelancer / agency running automations for clients</strong></td>
+<td>If a client's API keys and workflows vanish, you are rebuilding 40 credentials at 2am for free — or explaining to a client why their Stripe webhook is dead. This kit is the difference between a 30-minute restore and a lost client.</td>
+</tr>
+<tr>
+<td><strong>Solo builder self-hosting n8n on a VPS ($5–12/mo)</strong></td>
+<td>The VPS bill is the cheap part. One unmounted volume, one "temporary" server migration, one lost <code>~/.n8n/config</code> and the encryption key, and every stored credential is <strong>permanently unreadable</strong> — not "annoying", <em>permanently</em>.</td>
+</tr>
+<tr>
+<td><strong>Someone who almost paid for n8n Cloud because self-hosting felt scary</strong></td>
+<td>11 hours of setup pain and $5,000/yr of hidden maintenance time is what happens when nobody hands you a production-grade file set. You are getting that file set.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>The problem in one paragraph</h2>
+<p>n8n encrypts every stored credential with a single key. It generates that key automatically on first launch and tucks it in <code>~/.n8n/config</code>. Almost every tutorial — including the good ones — never mentions it. So when someone restores a database onto a new server with a <em>different</em> key, n8n boots perfectly, the UI looks fine, and then <strong>every workflow fails with <code>Credentials could not be decrypted</code></strong>. There is no reset. There is no support ticket. An n8n maintainer confirmed on the community forum: without the original key, that data cannot be recovered.</p>
+<p>This kit makes sure that sentence never applies to you.</p>
+<hr />
+<h2>What's in the box</h2>
+<pre><code>README-KIT.md                  ← you are here
+01-WHY-BACKUPS-FAIL.md         ← the 4 failure modes (read this once, 10 min)
+02-HOW-SETUP.md                ← install in 25 minutes, step by step
+03-HOW-RESTORE.md              ← the 3 recovery scenarios + migration
+04-HOW-RUN-FOREVER.md          ← cron, monitoring, client handoff, upsell
+index.html                     ← printable handbook version (print to PDF from your browser)
+
+scripts/
+  01-preflight-check.sh        ← 10-second safety verdict on your current instance
+  02-backup.sh                 ← the nightly backup (DB + volume + key + JSON)
+  03-restore.sh                ← 3 restore modes (json / volume / database)
+  04-restore-drill.sh          ← proves restore works on a throwaway instance
+  05-offsite.sh                ← offsite copies (Backblaze B2 / R2 / Wasabi)
+  docker-compose.yml           ← the safe-by-construction stack
+  .env.example                 ← every variable explained
+  n8n-backup.defaults          ← config for the scripts (no script editing)
+  README.md                    ← commands, options, troubleshooting
+
+templates/
+  client-onboarding-form.md    ← the credentials + scope form that prevents rework
+  incident-runbook.md          ← one-page &quot;it broke at 2am&quot; procedure
+  proposal-snippet.md          ← paste into a quote: maintenance &amp; backups, priced
+
+CHANGELOG.md                   ← what's in each version (a maintenance product should be maintained)
+FEEDBACK.md                    ← 2 questions, 60 seconds
+</code></pre>
+<p><strong>Prefer paper?</strong> Open <code>index.html</code> in any browser → <code>Ctrl/Cmd+P</code> → Save as PDF. It's the whole handbook in one printable file, with page breaks in the right places.</p>
+<hr />
+<h2>Fastest possible path (25 minutes)</h2>
+<ol>
+<li>
+<p><strong>Get the verdict on what you have now</strong>
+   <code>bash
+   bash scripts/01-preflight-check.sh</code>
+   Every <code>FAIL</code> line is a real way people lose n8n. Don't skip ahead.</p>
+</li>
+<li>
+<p><strong>Install</strong> — follow <code>02-HOW-SETUP.md</code>. It's 9 numbered steps: key, compose file, backup script, permissions, first manual backup.</p>
+</li>
+<li>
+<p><strong>Prove it</strong> — this is the part that makes the kit worth buying:
+   <code>bash
+   sudo bash scripts/04-restore-drill.sh</code>
+   Five minutes, zero risk to production (it uses its own containers, own database, port 5678). You finish with <code>DRILL PASSED</code> on screen and a dated file in <code>~/.n8n-last-drill</code>.</p>
+</li>
+<li>
+<p><strong>Automate</strong> — <code>04-HOW-RUN-FOREVER.md</code> step 1 gives you the two crontab lines and a free healthcheck ping, so a broken backup emails <em>you</em> instead of surprising you mid-outage.</p>
+</li>
+</ol>
+<hr />
+<h2>What "safe" looks like, concretely</h2>
+<p>After setup, you can survive:</p>
+<ul>
+<li><strong>Container deleted / image updated badly</strong> → <code>MODE=volume</code> restore, ~4 minutes.</li>
+<li><strong>Server terminated by the provider, disk dead, account closed</strong> → new $6 VPS, restore from offsite, <strong>under 30 minutes</strong>, credentials intact because you stored the key.</li>
+<li><strong>You want to duplicate a client's stack to a staging instance</strong> → the JSON path in <code>03-restore.sh</code> does it additively.</li>
+<li><strong>A client asks "do you back this up?" during a sales call</strong> → you send the date of your last successful restore drill. That sentence alone justifies the price of this kit many times over.</li>
+</ul>
+<h2>Honest limits — read this before you buy</h2>
+<ul>
+<li>It targets <strong>Docker-based self-hosted n8n on Linux</strong> (Ubuntu/Debian). n8n Cloud, Windows, and npm-without-a-volume installs are out of scope (there's a short note in <code>04</code> for each).</li>
+<li>It is <strong>not</strong> high-availability. It gives you <em>recovery</em>, not zero-downtime failover. Queue-mode / worker setups get an extra section, but a hot standby is a different problem.</li>
+<li><strong>You still own the boring 20%</strong>: creating the password-manager note for the key, adding the bucket, running the drill each quarter. If you skip the drill, you bought a file set, not safety.</li>
+<li>n8n's own encryption design is theirs, not a flaw I can script around: <strong>no key = no credentials</strong>, period. Everything here exists to make sure you never lose the key.</li>
+</ul>
+<hr />
+<p><strong>Support &amp; updates:</strong> reply to your Gumroad receipt and I'll answer within 2 business days. Version history in <code>CHANGELOG.md</code>.</p></section><section id="1"><h1 class="doctitle">1 · Why n8n backups fail</h1><h1>01 · Why n8n backups fail</h1>
+<p>Most people don't lose their n8n instance because they forgot to back it up. They lose it because they had a backup that looked fine and didn't work when it mattered. There are four failure modes, and between them they account for nearly every horror story in the n8n community forum.</p>
+<hr />
+<h2>Failure mode 1 — The key that was never captured <em>(the brutal one)</em></h2>
+<p><strong>Mechanism.</strong> n8n doesn't store your API keys and OAuth tokens as plain text. Before anything touches the database, it is encrypted with one key:</p>
+<ul>
+<li>If you set <code>N8N_ENCRYPTION_KEY</code>, n8n uses yours.</li>
+<li>If you didn't, n8n generates a random one on first launch and writes it to <code>~/.n8n/config</code> (inside the container: <code>/home/node/.n8n/config</code>).</li>
+</ul>
+<p><strong>The trap.</strong> That config file lives <em>next to</em> the data. Rebuild the container without a persistent volume, restore a database dump onto a fresh instance, or reinstall n8n on a new server, and you get a <strong>new</strong> key. Now the old credentials in the database are mathematically unreachable.</p>
+<blockquote>
+<p>An n8n maintainer on the community forum, when asked for a recovery path: there is no way of getting the data back without the original key. Encryption that could be undone without the key wouldn't be encryption.</p>
+</blockquote>
+<p><strong>Symptom.</strong> <code>Credentials could not be decrypted. The likely reason is that a different "encryptionKey" was used to encrypt the data.</code> Everything else — the UI, the workflow list, the execution history — looks perfectly normal, which is what makes it so disorienting.</p>
+<p><strong>What changes the outcome.</strong> Set the key explicitly <strong>before you create your first credential</strong>, and store it somewhere that outlives the server (password manager, not just <code>.env</code> on the box). If the server dies and the key was only on the server, they die together.</p>
+<p><strong>Cost of being caught by this.</strong> Re-entering every credential. For a personal setup, an afternoon. For an agency with 12 clients' Stripe, HubSpot, Google Workspace and SMTP credentials, it's a billable week you can't bill — and a trust problem.</p>
+<hr />
+<h2>Failure mode 2 — The volume that was never mounted</h2>
+<p><strong>Mechanism.</strong> <code>docker run</code> without <code>-v n8n_data:/home/node/.n8n</code> writes everything into the container's writable layer. Containers are disposable. Delete the container, upgrade the image, or restart after a compose edit, and the data is gone.</p>
+<p><strong>Symptom.</strong> "n8n reset itself", empty workflow list, or the key problem above with an extra step: nothing to recover.</p>
+<p><strong>Detection (2 seconds):</strong></p>
+<pre><code class="language-bash">docker inspect -f '{{range .Mounts}}{{.Type}} {{.Source}} -&gt; {{.Destination}}{{println}}{{end}}' n8n
+</code></pre>
+<p>If there is no line ending in <code>-&gt; /home/node/.n8n</code>, you are running on borrowed time. <code>scripts/01-preflight-check.sh</code> checks this for you.</p>
+<p><strong>Fix.</strong> Named volume or bind mount, plus <code>restart: unless-stopped</code>. See <code>02-HOW-SETUP.md</code>.</p>
+<hr />
+<h2>Failure mode 3 — The backup on the same disk</h2>
+<p><strong>Mechanism.</strong> <code>~/n8n-backups/</code> on the VPS. Great — until the incident that destroys the instance also destroys the backups: a dead disk, a provider account closed for a billing dispute, a ransomware pass, a <code>rm -rf</code> in the wrong terminal, an expired card leading to a server deletion you learn about a week later.</p>
+<p><strong>Rule.</strong> A backup needs an <strong>independent failure mode</strong>. Different machine, different provider, different account. Offsite isn't a "nice to have" for n8n, because the most likely cause of loss is the whole server.</p>
+<p><strong>Also true:</strong> offsite copies of <em>encrypted credential dumps</em> are only as safe as the storage. Encrypt before you upload (<code>scripts/05-offsite.sh</code> wraps the bucket in rclone <code>crypt</code>, so the provider stores opaque blobs).</p>
+<hr />
+<h2>Failure mode 4 — The backup nobody ever restored</h2>
+<p>The most common one, and the least talked about. Someone runs <code>pg_dump</code> nightly for two years, then needs it once — and finds:</p>
+<ul>
+<li>the dump was 0 bytes because the container name had changed after an upgrade;</li>
+<li><code>pg_restore</code> fails because the role/database names differ on the new box;</li>
+<li>workflows restore fine, but every node's credential is a red "missing" badge;</li>
+<li>the n8n version is newer than the schema in the dump and the import half-applies;</li>
+<li>or the cron job silently never ran because <code>docker</code> wasn't in root's <code>PATH</code>.</li>
+</ul>
+<p><strong>A backup you have never restored is a hypothesis.</strong> That's why this kit ships <code>04-restore-drill.sh</code> as a first-class file rather than a paragraph of advice, and why <code>01-preflight-check.sh</code> fails the check if your last drill is more than 90 days old.</p>
+<p><strong>The standard to aim for:</strong> quarterly drill, ~30 minutes, on a throwaway instance. Measured recovery target for a solo/small setup: <strong>RTO ≈ 30 minutes</strong> (time to be back up), <strong>RPO ≈ 24 hours</strong> (data you can lose) — tightened to RPO ≈ 1 hour only if your automations create records outside n8n that you'd have to hand-repair.</p>
+<hr />
+<h2>What a correct backup set actually contains</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Where it lives</th>
+<th>Without it, you lose…</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Database</strong></td>
+<td><code>postgres_data</code> volume (or <code>database.sqlite</code>)</td>
+<td>everything: workflows, credentials (encrypted), users, history</td>
+</tr>
+<tr>
+<td><strong>Encryption key</strong></td>
+<td><code>N8N_ENCRYPTION_KEY</code> env var, or <code>~/.n8n/config</code></td>
+<td>the ability to <em>read</em> any credential</td>
+</tr>
+<tr>
+<td><strong>n8n data volume</strong></td>
+<td><code>n8n_data</code> volume</td>
+<td>custom nodes, binary data, instance settings</td>
+</tr>
+<tr>
+<td><strong>Stack files</strong></td>
+<td><code>/opt/n8n/docker-compose.yml</code>, <code>.env</code>, proxy config</td>
+<td>hours of reconstructing config; webhooks that point at the wrong host</td>
+</tr>
+<tr>
+<td><strong>JSON exports</strong></td>
+<td><code>n8n export:workflow</code> / <code>n8n export:credentials</code></td>
+<td>nothing — but they're your escape hatch when the DB restore is the thing that broke</td>
+</tr>
+</tbody>
+</table>
+<p>Five lines. <code>scripts/02-backup.sh</code> captures all five into one dated folder per night, with a checksum and a <code>MANIFEST.txt</code> that states the restore order.</p>
+<hr />
+<h2>One thing to internalise before you set anything up</h2>
+<blockquote>
+<p><strong>The order of a restore matters more than the backup itself.</strong>
+Key first (before the instance ever starts), then database, then volume, then verify one credential with <code>Test</code>, then run one workflow.
+Do it out of order and you can corrupt a recoverable situation into an unrecoverable one — e.g. starting n8n with a fresh auto-generated key on a machine that's about to hold your restored credentials.</p>
+</blockquote>
+<p>Keep that as a printed page next to the server rack in your head. <code>templates/incident-runbook.md</code> is exactly that page, in 25 lines, so you never have to recall it under pressure.</p></section><section id="2"><h1 class="doctitle">2 · Setup in 25 minutes</h1><h1>02 · Setup in 25 minutes (no coding)</h1>
+<p><strong>Prerequisites:</strong> a Linux VPS (Ubuntu 22.04/24.04 or Debian 12), 1GB+ RAM, root or sudo access, and Docker installed. If Docker isn't there yet:</p>
+<pre><code class="language-bash">curl -fsSL https://get.docker.com | sudo sh
+</code></pre>
+<blockquote>
+<p>If n8n is <strong>already running</strong> on this server, that's fine — steps 1–4 apply as-is. Skip to the notes at the bottom before you touch anything, and run the preflight first: <code>bash scripts/01-preflight-check.sh</code>.</p>
+</blockquote>
+<hr />
+<h2>Step 1 — Create the project folder (2 min)</h2>
+<pre><code class="language-bash">sudo mkdir -p /opt/n8n
+cd /opt/n8n
+sudo chown -R &quot;$USER&quot;:&quot;$USER&quot; /opt/n8n
+</code></pre>
+<p><strong>Why <code>/opt</code>:</strong> it's a stable path that survives you rebuilding containers, and it keeps backups and compose files out of your home directory (where a user deletion would take them with it).</p>
+<hr />
+<h2>Step 2 — Generate the encryption key, and write <code>.env</code> (3 min)</h2>
+<pre><code class="language-bash">openssl rand -hex 32      # prints 64 characters - this is your key
+</code></pre>
+<p>Open your <strong>password manager</strong> and create a secure note named <code>n8n encryption key — &lt;your domain&gt;</code>. Paste it there <strong>now</strong>, before it exists anywhere else. This single habit is what separates a 30-minute restore from a lost instance.</p>
+<p>Then:</p>
+<pre><code class="language-bash">cp .env.example .env        # from the kit's scripts/ folder
+nano .env
+</code></pre>
+<p>Fill in <code>N8N_ENCRYPTION_KEY</code>, <code>DB_PASSWORD</code> (run the <code>openssl</code> line again for that too), and <code>N8N_HOST</code> (your real domain). Save with <code>Ctrl+O</code>, <code>Enter</code>, exit with <code>Ctrl+X</code>. Then lock it down:</p>
+<pre><code class="language-bash">chmod 600 .env
+</code></pre>
+<p><strong>What you should see:</strong> <code>ls -l .env</code> shows <code>-rw-------</code>. If it's readable by "others", any user on that server can read your DB password.</p>
+<hr />
+<h2>Step 3 — Install the compose file (2 min)</h2>
+<pre><code class="language-bash">cp docker-compose.yml /opt/n8n/docker-compose.yml
+cd /opt/n8n
+docker compose config -q &amp;&amp; echo &quot;compose file is valid&quot;
+</code></pre>
+<p>If <code>docker compose config -q</code> prints nothing (or the echo runs), your variables resolved and the file parses. If it complains about a missing variable, you skipped something in <code>.env</code> — the file intentionally refuses to start with <code>:?set N8N_ENCRYPTION_KEY...</code>, because starting without a key is exactly how people end up on page 1 of this kit's problem list.</p>
+<hr />
+<h2>Step 4 — First start (2 min)</h2>
+<pre><code class="language-bash">docker compose up -d
+docker compose logs --tail=30 n8n
+</code></pre>
+<p><strong>What you should see:</strong> lines ending with <code>Editor is now accessible via: http://n8n.example.com:5678</code> and no <code>ERROR</code> lines. Open <code>http://YOUR_SERVER_IP:5678</code> if you haven't pointed a domain yet (that's fine for setup; see <code>04</code> step 5 for TLS before you store real client credentials).</p>
+<p>Create the owner account, then <strong>add one credential and click Test</strong>. If that works with the key you just set, you've proved the whole chain: key → credential → readable credential.</p>
+<hr />
+<h2>Step 5 — Install the scripts (2 min)</h2>
+<pre><code class="language-bash">sudo mkdir -p /opt/n8n/scripts
+cp scripts/0*.sh scripts/n8n-backup.defaults /opt/n8n/scripts/
+cd /opt/n8n/scripts
+sudo chmod +x 0*.sh
+sudo cp n8n-backup.defaults /etc/n8n-backup.env
+sudo nano /etc/n8n-backup.env        # set STACK_DIR=/opt/n8n and the container names
+</code></pre>
+<p>Find your real container names (they differ between <code>docker-compose</code> and <code>docker compose</code>):</p>
+<pre><code class="language-bash">docker ps --format 'table {{.Names}}\t{{.Image}}'
+</code></pre>
+<p>Set <code>N8N_CONTAINER</code> and <code>DB_CONTAINER</code> to those exact values in <code>/etc/n8n-backup.env</code>. This is the #1 reason backup scripts fail silently.</p>
+<hr />
+<h2>Step 6 — Run a manual backup (1 min)</h2>
+<pre><code class="language-bash">sudo bash 02-backup.sh
+</code></pre>
+<p><strong>What you should see:</strong></p>
+<pre><code>[..] encryption key captured (source: env var)
+[..] pg_dump (postgres)
+[..] taring data volume: n8n_n8n_data
+[..] exporting workflows as JSON
+[..] exporting credentials (encrypted at rest)
+[..] archive: /var/backups/n8n/20260904T181200Z/backup.tar.gz (4.2M)
+[..] DONE. Backup is at ...
+[..] Prove it restores:  bash 04-restore-drill.sh
+</code></pre>
+<p>Check it:</p>
+<pre><code class="language-bash">ls -lh /var/backups/n8n/latest/
+tar tzf /var/backups/n8n/latest/backup.tar.gz | head
+</code></pre>
+<p>You want to see <code>ENCRYPTION_KEY.txt</code>, <code>database.dump</code>, <code>n8n-data.tar.gz</code>, <code>MANIFEST.txt</code>, and a <code>workflows/</code> folder.</p>
+<hr />
+<h2>Step 7 — Prove the restore works (5 min) ⭐</h2>
+<pre><code class="language-bash">sudo bash 04-restore-drill.sh
+</code></pre>
+<p>This boots a <strong>separate</strong> throwaway n8n (own containers, own empty database, port 5678 bound to <code>127.0.0.1</code>), imports your backup into it, asks you to click through 4 checks in the browser, then deletes everything. Your production instance is never stopped, never touched.</p>
+<p><strong>What you should see:</strong> <code>DRILL PASSED</code>. If a check fails, you just saved yourself a real outage — that's the drill succeeding at its job.</p>
+<blockquote>
+<p>No Docker on the machine right now? Do this instead: read <code>03-HOW-RESTORE.md</code> scenario C and simulate it with your JSON exports on any second n8n you can spin up (even a free-tier n8n Cloud trial instance, once, just to learn the flow).</p>
+</blockquote>
+<hr />
+<h2>Step 8 — Schedule it (2 min)</h2>
+<pre><code class="language-bash">sudo crontab -e
+</code></pre>
+<p>Add (press <code>i</code>, paste, <code>Esc</code>, <code>:wq</code>):</p>
+<pre><code class="language-cron">17 3 * * * /usr/bin/env bash -c 'cd /opt/n8n/scripts &amp;&amp; ./02-backup.sh &gt;&gt; /var/log/n8n-backup.log 2&gt;&amp;1'
+43 3 * * * /usr/bin/env bash -c 'cd /opt/n8n/scripts &amp;&amp; OFFSITE_REMOTE=$(grep -m1 ^OFFSITE_REMOTE= /etc/n8n-backup.env | cut -d= -f2) ./05-offsite.sh &gt;&gt; /var/log/n8n-backup.log 2&gt;&amp;1'
+</code></pre>
+<p>Odd minute (17) on purpose: avoids the thundering herd of every <code>0 3 * * *</code> job on the same host, and it's after most nightly workflow runs finish.</p>
+<hr />
+<h2>Step 9 — Offsite copy (3 min, do it today)</h2>
+<pre><code class="language-bash">sudo bash 05-offsite.sh setup
+</code></pre>
+<p>Follow the prompts (Backblaze B2 free tier is the fastest path). Then add to <code>/etc/n8n-backup.env</code>:</p>
+<pre><code>OFFSITE_REMOTE=n8n-b2:
+OFFSITE_ENCRYPT_NAME=n8n-crypt:
+</code></pre>
+<p>Verify with <code>rclone ls n8n-crypt: | head</code>. If you can't read the filenames, that's the <strong>desired</strong> result.</p>
+<hr />
+<h2>Notes if n8n is already live on this server</h2>
+<ol>
+<li><strong>Set the key carefully.</strong> If n8n already generated one inside the volume, you must reuse <em>that</em> value — do <strong>not</strong> invent a new one. Read it first:
+   <code>bash
+   docker exec n8n cat /home/node/.n8n/config</code>
+   Put that exact value into <code>.env</code> as <code>N8N_ENCRYPTION_KEY</code>, then <code>docker compose up -d</code>. Verify a credential still opens and tests OK. If you set a <em>different</em> key here, you create the disaster this kit exists to prevent.</li>
+<li><strong>Don't change DB type mid-flight.</strong> SQLite → Postgres is a data migration, not an env var. It's documented in <code>04-HOW-RUN-FOREVER.md</code> step 6 (n8n supports <code>DB_TYPE=postgresdb</code> with a migration; do it on a copy first, using a drill).</li>
+<li><strong>Pin your image tag</strong> before you copy this compose in. If you're running <code>:latest</code>, <code>02</code> will happily keep backing up whatever version exists, but a surprise auto-upgrade can break nodes. Pin → snapshot the working version → then upgrade deliberately.</li>
+</ol>
+<hr />
+<p><strong>Done?</strong> Run the preflight once more — <code>bash scripts/01-preflight-check.sh</code> — and you should be at <code>0 FAIL</code>. Then read <code>03-HOW-RESTORE.md</code> once, calmly, today. Reading a restore procedure while nothing is on fire is the only time it actually sticks.</p></section><section id="3"><h1 class="doctitle">3 · Restore playbook</h1><h1>03 · Restore playbook — 3 scenarios + 1 migration</h1>
+<p>Print this. Keep it in your password manager's secure notes, not only on the server you're recovering.</p>
+<p><strong>Rule that never changes:</strong> on the target machine, the key goes into <code>.env</code> <strong>before</strong> n8n starts there. Once a fresh instance writes its own auto-generated key and you've created credentials with it, mixing restored credentials into that instance gets confusing.</p>
+<p><strong>Quick selector</strong></p>
+<table>
+<thead>
+<tr>
+<th>What happened</th>
+<th>Go to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container gone / bad update / compose file broken — server itself is fine</td>
+<td>Scenario <strong>A</strong></td>
+</tr>
+<tr>
+<td>Data volume wiped or corrupted, server fine</td>
+<td>Scenario <strong>B</strong></td>
+</tr>
+<tr>
+<td>Whole VPS dead / account closed / migrating to a new provider</td>
+<td>Scenario <strong>C</strong></td>
+</tr>
+<tr>
+<td>Copying a stack into staging, or cloning for a second client</td>
+<td>Scenario <strong>D</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>Scenario A — Container rebuilt (4 minutes)</h2>
+<pre><code class="language-bash">cd /opt/n8n
+grep N8N_ENCRYPTION_KEY .env                  # confirm the key line exists
+docker compose up -d
+docker compose logs --tail=20 n8n
+</code></pre>
+<p>Nothing else needed — the volume still holds your data. If n8n came back but credentials now fail to decrypt, the <code>.env</code> key and the volume's key disagree; read the value in the volume (<code>docker run --rm -v n8n_n8n_data:/data alpine cat /data/config</code>) and make them match.</p>
+<hr />
+<h2>Scenario B — Data volume lost (12 minutes)</h2>
+<pre><code class="language-bash">cd /opt/n8n/scripts
+sudo MODE=volume bash 03-restore.sh /var/backups/n8n/&lt;TIMESTAMP&gt;
+</code></pre>
+<p>The script stops n8n, empties the volume, unpacks <code>n8n-data.tar.gz</code>, restarts. It asks you to type <code>YES</code> first. If the volume name isn't detected, set it: <code>sudo DATA_VOLUME=n8n_n8n_data MODE=volume bash 03-restore.sh</code>.</p>
+<hr />
+<h2>Scenario C — Whole server gone (this is the one)</h2>
+<p><strong>You need three things:</strong> the offsite folder, the encryption key (password manager), and the compose file (also in the offsite folder).</p>
+<h3>1. New box (5 min)</h3>
+<p>Buy the smallest Ubuntu 24.04 VPS your provider offers (€5–8/mo is plenty). Then:</p>
+<pre><code class="language-bash">curl -fsSL https://get.docker.com | sudo sh
+sudo mkdir -p /opt/n8n &amp;&amp; cd /opt/n8n
+</code></pre>
+<h3>2. Pull the backup down (2 min)</h3>
+<pre><code class="language-bash">rclone copy n8n-crypt:/n8n/20260904T181200Z /opt/n8n/restore/ --progress
+</code></pre>
+<p>No rclone yet? <code>aws s3 sync</code> / provider dashboard download / <code>scp</code> from the old box if it still lives.</p>
+<h3>3. Restore the key and stack FIRST (2 min)</h3>
+<pre><code class="language-bash">cd /opt/n8n
+tar xzf restore/backup.tar.gz -C restore/
+cp restore/docker-compose.yml . 2&gt;/dev/null || cp /opt/n8n/scripts/docker-compose.yml .
+printf 'N8N_ENCRYPTION_KEY=%s\n' &quot;$(cat restore/ENCRYPTION_KEY.txt)&quot; &gt;&gt; .env
+nano .env                # re-add DB_PASSWORD + N8N_HOST (they were masked on purpose)
+chmod 600 .env
+</code></pre>
+<blockquote>
+<p>The backup deliberately <strong>masks</strong> <code>.env</code> secrets. So the DB password is the one thing you must remember or reset: create a fresh <code>DB_PASSWORD</code> on the new box — it doesn't need to match the old server, since you're restoring the <em>data</em>, not the credentials of Postgres itself.</p>
+</blockquote>
+<h3>4. Bring up the stack (3 min)</h3>
+<pre><code class="language-bash">docker compose up -d
+docker compose logs --tail=30 n8n       # wait for the &quot;Editor is now accessible&quot; line
+</code></pre>
+<h3>5. Restore the data (2 min)</h3>
+<pre><code class="language-bash">cd /opt/n8n/scripts
+sudo MODE=database bash 03-restore.sh /opt/n8n/restore
+</code></pre>
+<p>It asks for <code>YES</code>, stops n8n, <code>pg_restore --clean --if-exists</code>, restarts.</p>
+<h3>6. If <code>pg_restore</code> fights you: use the JSON path instead</h3>
+<p>This is why the kit exports JSON every night. On a <strong>fresh empty</strong> instance:</p>
+<pre><code class="language-bash">sudo bash 03-restore.sh /opt/n8n/restore          # MODE=json is the default
+</code></pre>
+<p>Then re-create the owner account if asked, and re-check credentials.</p>
+<h3>7. Point DNS at the new IP (10–30 min to propagate)</h3>
+<pre><code class="language-bash">dig +short n8n.yourdomain.com
+</code></pre>
+<p>Then, once the site loads: <strong>every active workflow that talks to webhooks needs its URL re-checked</strong> (<code>WEBHOOK_URL</code>/<code>N8N_HOST</code> in compose). If you use Zapier/Stripe/Make calling your webhooks, they'll follow DNS automatically; anything with the IP hard-coded needs an edit.</p>
+<h3>8. Verify (5 min)</h3>
+<p>Credentials → open → <strong>Test</strong>. Then run one workflow end to end. Then a second one that writes data. Only now tell the client / resume business.</p>
+<hr />
+<h2>Scenario D — Clone a stack to staging, or duplicate for another client</h2>
+<p>Same as C, but <strong>skip the <code>--clean</code></strong>: the JSON path only. Two things to watch:</p>
+<ol>
+<li><strong>IDs overwrite.</strong> n8n exports include workflow/credential IDs; importing into an instance that already has those IDs replaces them. For a clean clone, import into an empty instance (the drill does exactly this — see <code>scripts/README.md</code>).</li>
+<li><strong>Shared credentials = shared blast radius.</strong> Cloning a client's stack for a second client is where people accidentally leak one client's API key into another's workflow. After cloning: delete all credentials in the copy, then re-add per-client ones, and run the credential test node in every workflow.</li>
+</ol>
+<hr />
+<h2>When the DB is fine but credentials are broken</h2>
+<p><code>Credentials could not be decrypted</code> after a restore means key mismatch. Three options, in order of preference:</p>
+<ol>
+<li><strong>Find the old key.</strong> Old <code>.env</code> files, a shell history (<code>grep N8N_ENCRYPTION_KEY ~/.bash_history</code>), a previous server snapshot, or the old volume if it still exists:
+   <code>bash
+   docker run --rm -v old_n8n_data:/data alpine cat /data/config</code>
+   Set it, restart, done — everything comes back in about two minutes.</li>
+<li><strong>You have a decrypted export</strong> (<code>INCLUDE_DECRYPTED=1</code> backups): <code>docker exec n8n n8n import:credentials --input=/tmp/creds.json</code> on the <em>new</em> instance — imports re-encrypt with the current key. Then <strong>shred that file</strong>.</li>
+<li><strong>Neither:</strong> re-enter credentials. Annoying, not catastrophic, because your <em>workflows</em> are intact. Do it in dependency order (SMTP, Google, Stripe, CRM), test each, and re-run the affected workflows one at a time.</li>
+</ol>
+<hr />
+<h2>Post-restore hygiene</h2>
+<pre><code class="language-bash">find /opt/n8n -maxdepth 1 -name '*.json' -newer /opt/n8n/.env   # stray decrypted dumps?
+sudo shred -u /opt/n8n/RESTORE-ENCRYPTION_KEY.txt                # after the key is in your password manager
+sudo bash /opt/n8n/scripts/01-preflight-check.sh                 # should be 0 FAIL again
+</code></pre>
+<p>Record the incident: date, cause, time-to-recover, what you'd change. That paragraph becomes the maintenance-report line item that justifies your retainer (<code>templates/proposal-snippet.md</code>).</p></section><section id="4"><h1 class="doctitle">4 · Running it forever</h1><h1>04 · Running it forever (and getting paid for it)</h1>
+<p>Setup done once; the boring parts keep you safe. Seven things, ~30 minutes of work total.</p>
+<hr />
+<h2>1. Monitoring: a backup that fails silently is worse than none</h2>
+<p>Free, 3 minutes: create a check at <a href="https://healthchecks.io">healthchecks.io</a>, copy its UUID, and set it in <code>/etc/n8n-backup.env</code>:</p>
+<pre><code>HEALTHCHECK_UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+</code></pre>
+<p><code>02-backup.sh</code> pings it on success. If a nightly run dies, you get an email in under 26 hours. This is how you learn about a broken backup <em>before</em> you need the backup.</p>
+<p>No-account alternative: the log line the script appends.</p>
+<pre><code class="language-bash">tail -5 /var/backups/n8n/n8n-backup.log
+grep -c 'STATUS=OK' /var/backups/n8n/n8n-backup.log   # count of good nights
+</code></pre>
+<hr />
+<h2>2. Quarterly drill (the one habit that keeps the others honest)</h2>
+<pre><code class="language-bash">sudo bash /opt/n8n/scripts/04-restore-drill.sh
+</code></pre>
+<p>Put it in your calendar for the first Saturday of January / April / July / October, at 10:00, 30 minutes. It writes <code>~/.n8n-last-drill</code>, and <code>01-preflight-check.sh</code> will start nagging (loudly, in red) after 90 days.</p>
+<p>If you sell automation as a service, run it while a client is on a call. Nothing sells "this person is serious" like restoring a live instance on demand.</p>
+<hr />
+<h2>3. Log rotation (so the log doesn't eat your disk)</h2>
+<pre><code class="language-bash">printf '/var/log/n8n-backup.log {\n  monthly\n  rotate 6\n  compress\n  missingok\n  notifempty\n}\n' | sudo tee /etc/logrotate.d/n8n-backup
+</code></pre>
+<hr />
+<h2>4. Disk math: how big will this get?</h2>
+<p>A typical solo instance: 2–40 MB per nightly backup (execution history dominates). 14 days retained locally ≈ 0.5 GB; offsite ≈ a few cents per month on Backblaze B2.</p>
+<p>If your <code>backup.tar.gz</code> is bigger than ~500 MB, your execution history is the reason. Reduce retention inside n8n rather than dropping backups:</p>
+<pre><code>EXECUTIONS_DATA_PRUNE=true
+EXECUTIONS_DATA_MAX_AGE=168        # hours (7 days)
+EXECUTIONS_DATA_PRUNE_MAX_COUNT=50000
+</code></pre>
+<p>Also worth knowing: <code>docker system prune -f</code> on a host that's been upgraded a few times can free more GB than your entire backup folder weighs.</p>
+<hr />
+<h2>5. Version pinning + upgrade routine</h2>
+<p>Never run <code>:latest</code> in a client-facing stack. Pin (<code>image: docker.n8n.io/n8nio/n8n:1.88.0</code>), and upgrade like this:</p>
+<pre><code class="language-bash">cd /opt/n8n
+sudo bash scripts/02-backup.sh            # explicit safety copy before the change
+nano docker-compose.yml                    # bump the tag
+docker compose pull &amp;&amp; docker compose up -d
+docker exec n8n n8n --version
+</code></pre>
+<p>Then: open the 3 workflows that matter most and run each once. If anything's off, roll back by editing the tag and re-running <code>up -d</code> — your data volume and database are untouched. <strong>Take a snapshot at your VPS provider before a major-version jump</strong> (1.88 → 2.x style changes); it costs pennies for an hour and it's the second-best backup you have.</p>
+<hr />
+<h2>6. SQLite → PostgreSQL, when you outgrow the default file DB</h2>
+<p>Signs it's time: many concurrent workflows, execution DB locking errors, &gt;1 GB <code>database.sqlite</code>, or you're adding workers. Do it on a copy, using the drill infrastructure:</p>
+<ol>
+<li><code>sudo bash scripts/02-backup.sh</code> (obviously).</li>
+<li>Spin up the kit's compose <strong>with Postgres</strong> on a staging port, empty DB.</li>
+<li>Use the JSON path to populate it: <code>sudo bash 03-restore.sh</code> (workflows + credentials). Users/settings don't come across this way — you'll recreate the owner account, which on a 1-user instance is 90 seconds.</li>
+<li>Run both stacks side by side for a day if you can afford it.</li>
+<li>Flip DNS/webhooks, keep the SQLite volume mounted as an escape hatch for a week.</li>
+</ol>
+<p>n8n's own <code>export:workflow</code> / <code>import:workflow</code> CLI is the supported path; there is no in-place "switch the DB type and go" button.</p>
+<hr />
+<h2>7. Queue mode / multiple workers: the key must be identical everywhere</h2>
+<p>If you scale to workers (<code>EXECUTIONS_MODE=queue</code>), <strong>every worker container needs the same <code>N8N_ENCRYPTION_KEY</code></strong> as the main instance. A worker without it generates its own and cannot decrypt credentials — which shows up as baffling per-node auth failures on some executions only. Same variable, same value, all services in the compose file.</p>
+<hr />
+<h2>Handing this to a client (the part people forget)</h2>
+<p>The kit's real value in an agency context: <em>the client gets an owned, documented, recoverable system, and you get a maintenance line item.</em></p>
+<p>Minimum handoff package per client:</p>
+<ol>
+<li>Copy of <code>templates/client-onboarding-form.md</code> — filled in <strong>before</strong> you build. It collects exactly what you need (credential owners, redirect URLs, what breaks when they change a password) and quietly tells the client you're organised.</li>
+<li>Their own password-manager entry holding <code>N8N_ENCRYPTION_KEY</code>, their bucket name, and their healthcheck URL. <strong>Give it to them, keep a copy</strong> — an instance whose key only you hold becomes a hostage situation on the day you two fall out. That's bad for them and legally bad for you.</li>
+<li>Their <code>/etc/n8n-backup.env</code> with <code>BACKUP_ROOT=/var/backups/n8n-&lt;client&gt;</code> and their own offsite prefix (<code>OFFSITE_REMOTE=n8n-b2:</code> + folder). One bucket, one prefix per client. If a client's credentials ever mix into another's backup folder, that's a contract problem, not a bug.</li>
+<li>The <code>01-preflight-check.sh</code> output, saved as a PDF, in the handoff doc.</li>
+<li><code>templates/incident-runbook.md</code>, filled with their hostname and bucket so a non-technical person could follow it.</li>
+</ol>
+<p><strong>Support boundary, stated in writing</strong> (paste into the proposal — see <code>templates/proposal-snippet.md</code>):
+- Included: restore within 30 min of being notified; monthly drill; config changes for upgrades.
+- Not included: rebuilding workflows they deleted inside the UI; re-authorising credentials whose passwords <em>they</em> changed and never told you about (that's a 15-minute billable task, not a warranty claim).</p>
+<hr />
+<h2>A yearly 20-minute review</h2>
+<p>Once a year, before renewing servers:</p>
+<ul>
+<li>[ ] Password manager note exists, is findable, and the key inside actually matches (<code>docker exec n8n printenv N8N_ENCRYPTION_KEY</code>).</li>
+<li>[ ] Offsite bucket credentials are still valid and the payment card behind it isn't expiring — more instances die from a dead card at the storage provider than from hackers.</li>
+<li>[ ] A drill passed in the last 90 days.</li>
+<li>[ ] Retention policy matches what clients expect (14 days ≠ "you can restore last March").</li>
+<li>[ ] Domain + DNS for <code>N8N_HOST</code>/<code>WEBHOOK_URL</code> are on an account that won't lapse silently.</li>
+<li>[ ] Restore time measured in minutes and written down in the runbook. Numbers in a runbook are worth money in a negotiation.</li>
+</ul></section><section id="5"><h1 class="doctitle">Scripts reference</h1><h1>Scripts reference</h1>
+<p>All scripts read <code>/etc/n8n-backup.env</code> if it exists (copy <code>n8n-backup.defaults</code> there), so you never edit a script to configure it. Every script is safe to re-run.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Does</th>
+<th>Needs sudo?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>01-preflight-check.sh</code></td>
+<td>Read-only health check of your instance. Lists OK / WARN / FAIL. Exit code 1 if anything FAILs.</td>
+<td>no (some checks see more with sudo)</td>
+</tr>
+<tr>
+<td><code>02-backup.sh</code></td>
+<td>One dated folder: key + DB dump + volume tar + compose/.env (secrets masked) + workflow/credential JSON + checksums + manifest. Prunes old folders, optional offsite upload, optional monitoring ping.</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>03-restore.sh</code></td>
+<td>Restores a folder. <code>MODE=json</code> (default, additive), <code>MODE=volume</code>, <code>MODE=database</code>.</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>04-restore-drill.sh</code></td>
+<td>Boots an isolated throwaway n8n, imports your latest backup, walks you through verification, destroys itself. Production untouched.</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>05-offsite.sh</code></td>
+<td><code>setup</code> mode = configure rclone + crypt wrapper. Default mode = push backup folders off the server.</td>
+<td>setup: yes / sync: no</td>
+</tr>
+</tbody>
+</table>
+<h2>Handy invocations</h2>
+<pre><code class="language-bash"># what does the preflight say about my current instance?
+bash 01-preflight-check.sh
+
+# back up into a different folder (dry-ish test on a machine with a small disk)
+sudo BACKUP_ROOT=/home/me/n8n-backups bash 02-backup.sh
+
+# include a plaintext credential export (encrypted offsite only!)
+sudo INCLUDE_DECRYPTED=1 bash 02-backup.sh
+
+# restore a specific night, non-interactive (automation / drill scripting)
+sudo FORCE=1 MODE=database bash 03-restore.sh /var/backups/n8n/20260901T031700Z
+
+# drill but keep the stack running so you can poke at it
+sudo KEEP=1 bash 04-restore-drill.sh
+# ... then clean up manually:
+cd ~/n8n-drill &amp;&amp; docker compose down -v &amp;&amp; cd .. &amp;&amp; rm -rf ~/n8n-drill
+
+# only sync today's folder offsite
+sudo OFFSITE_REMOTE=n8n-b2: bash 05-offsite.sh sync
+</code></pre>
+<h2>Two crontab lines (the standard install)</h2>
+<pre><code class="language-cron">17 3 * * * /usr/bin/env bash -c 'cd /opt/n8n/scripts &amp;&amp; ./02-backup.sh &gt;&gt; /var/log/n8n-backup.log 2&gt;&amp;1'
+43 3 * * * /usr/bin/env bash -c 'cd /opt/n8n/scripts &amp;&amp; ./05-offsite.sh &gt;&gt; /var/log/n8n-backup.log 2&gt;&amp;1'
+</code></pre>
+<h2>What the scripts touch on your server</h2>
+<ul>
+<li><code>02</code> writes: <code>/var/backups/n8n/&lt;TIMESTAMP&gt;/{backup.tar.gz,SHA256SUMS.txt,SIZE.txt}</code>, <code>latest</code> symlink, <code>n8n-backup.log</code>.</li>
+<li><code>02</code> runs inside the n8n container: <code>printenv</code>, <code>cat /home/node/.n8n/config</code>, <code>n8n export:*</code> into <code>/tmp</code> inside the container, then removes those temp files.</li>
+<li><code>02</code> reads: <code>docker exec</code>, <code>docker cp</code>, <code>docker volume inspect</code>, <code>pg_dump</code> inside the postgres container, your <code>docker-compose.yml</code> and <code>.env</code> (copies, with secrets masked in the <strong>copy</strong>).</li>
+<li><code>03</code>/<code>04</code> additionally: <code>docker cp</code> + <code>n8n import:*</code> (writes data into the instance you point at), and <code>04</code> creates/removes its own containers + volumes named <code>n8n-drill*</code>.</li>
+<li>Nothing in this kit edits your real <code>.env</code> or compose file. It never needs <code>rm -rf</code> on your data folders. Readable, 100% local, no network calls except your chosen storage backend and an optional <code>hc-ping.com</code> HTTPS ping.</li>
+</ul>
+<h2>Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause / fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>container 'n8n' is not running</code></td>
+<td>Your container has another name. <code>docker ps</code> → set <code>N8N_CONTAINER=</code> in <code>/etc/n8n-backup.env</code>.</td>
+</tr>
+<tr>
+<td><code>could not read an encryption key from anywhere</code></td>
+<td>Volume isn't persisted, or n8n never wrote a config. Read <code>02-HOW-SETUP.md</code> step 2 + the "already live" notes. This is exactly the situation the kit exists for.</td>
+</tr>
+<tr>
+<td><code>pg_dump failed</code></td>
+<td>Wrong <code>DB_CONTAINER</code>/<code>DB_USER</code>/<code>DB_NAME</code>, or Postgres image uses PGPASSWORD auth. Test manually: <code>docker exec &lt;db&gt; pg_dump -U n8n -d n8n -Fc -f /tmp/t.dump</code>.</td>
+</tr>
+<tr>
+<td><code>sqlite3 not available in the image</code></td>
+<td>Some images lack the binary. Fallback printed by the script: <code>docker cp n8n:/home/node/.n8n/database.sqlite .</code> — then put that file into the archive folder manually.</td>
+</tr>
+<tr>
+<td>workflows/credentials export steps fail</td>
+<td>Your n8n version doesn't support <code>--backup</code>. Set <code>EXPORT_SEPARATE=0</code> to use <code>--all --output=file.json</code>. Not fatal: the DB dump remains the authoritative backup.</td>
+</tr>
+<tr>
+<td><code>no volume named ... detected</code></td>
+<td>Bind mount instead of a named volume. Script auto-falls back to <code>--volumes-from</code>. Set <code>DATA_VOLUME</code> explicitly if you want the tar to be identical across runs.</td>
+</tr>
+<tr>
+<td>drill: <code>drill instance did not become ready</code></td>
+<td>Port 5678 taken, or no outbound network for the n8n image pull. <code>DRILL_PORT=5699 sudo -E bash 04-restore-drill.sh</code>; check <code>docker compose logs --tail=40 n8n</code> in <code>~/n8n-drill</code>.</td>
+</tr>
+<tr>
+<td>cron job never runs</td>
+<td>cron has a tiny <code>PATH</code> and no <code>docker</code> in it. That's why the crontab lines above use an absolute <code>/usr/bin/env bash -c</code> and full paths. Verify: <code>sudo crontab -l</code>, then <code>grep n8n-backup /var/log/syslog</code>.</td>
+</tr>
+<tr>
+<td>offsite upload fails but local backup is fine</td>
+<td>Intentional — the script keeps the local copy and marks <code>STATUS=WARN</code>. Test the remote alone: <code>rclone lsd n8n-b2:</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2>Restoring onto a <em>different</em> n8n version</h2>
+<p>Workflows and credentials restore across versions via JSON in the great majority of cases (node parameter renames are the usual snag — n8n shows a warning and you re-pick the field). A full database dump restore onto a <em>newer</em> n8n runs pending migrations automatically on boot; onto an <em>older</em> n8n than the one that wrote the dump, don't — restore JSON instead, or match versions. The drill is cheap: run it once after every n8n upgrade.</p></section>
+<footer>n8n Bulletproof Kit · v1.0 · you own everything in this file — scripts are plain bash, no network calls except your own storage provider.<br>
+Support: reply to your Gumroad receipt. Changelog: <code>CHANGELOG.md</code>.</footer>
+</div></body></html>

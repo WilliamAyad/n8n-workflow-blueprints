@@ -1,0 +1,8 @@
+# --- product build artifacts (regenerate with the zip command below) ---
+product/*.zip
+product/**/__pycache__/
+product/**/*.pyc
+
+# local scratch / tooling
+.pdftool/
+*.log

@@ -1,0 +1,65 @@
+# ============================================================
+#  n8n + PostgreSQL, configured so a backup can actually be restored.
+#  This is the "safe by construction" stack from the kit.
+#  Copy to /opt/n8n/docker-compose.yml, then:  docker compose up -d
+#  Before the FIRST start: put N8N_ENCRYPTION_KEY in .env (see .env.example)
+# ============================================================
+name: n8n
+
+volumes:
+  n8n_data:            # settings, custom nodes, binary data, and (if unset) the encryption key
+  postgres_data:       # workflows, credentials, users, execution history
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_USER:-n8n}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD in .env}
+      - POSTGRES_DB=${DB_NAME:-n8n}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-n8n} -d ${DB_NAME:-n8n}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:1.88.0     # pin your version; upgrade deliberately
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"                 # only your reverse proxy talks to n8n
+    environment:
+      # ---- THE LINE THAT SAVES YOUR CREDENTIALS ----
+      # Set BEFORE the first start, and before you create any credential.
+      # Without it, n8n invents a key inside the container and you inherit a
+      # permanent-loss risk the moment that volume dies.
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?set N8N_ENCRYPTION_KEY in .env before first start}
+      - N8N_HOST=${N8N_HOST:-n8n.example.com}
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://${N8N_HOST:-n8n.example.com}/
+      - GENERIC_TIMEZONE=${TZ:-UTC}
+      - TZ=${TZ:-UTC}
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=336            # 14 days of history keeps the DB small enough to back up fast
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_DATABASE=${DB_NAME:-n8n}
+      - DB_POSTGRESDB_USER=${DB_USER:-n8n}
+      - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # - ./nodes:/n8n-nodes           # uncomment when you install community nodes
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [internal, proxy]
+
+networks:
+  internal:
+  proxy:
+    name: caddy_proxy        # or your nginx-proxy / traefik network
